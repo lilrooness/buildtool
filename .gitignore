@@ -1,3 +1,5 @@
 .idea/
 .cmake*
 CMakeUserPresets.json
+.generated_configuration
+vcpkg_overrides_template.json

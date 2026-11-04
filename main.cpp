@@ -54,15 +54,31 @@ json get_directory_as_json_blob(std::filesystem::path& path) {
     return blob;
 }
 
+void generate_directory_structure_from_json_blob(json blob, std::filesystem::path destination) {
+    for (auto f : blob.items()) {
+        if (f.value().is_object()) {
+            auto childPath = destination;
+            childPath.append(f.key());
+            std::filesystem::create_directory(childPath);
+            generate_directory_structure_from_json_blob(f.value(), childPath);
+        }
+        else if (f.value().is_string()) {
+            auto fileDestination = destination;
+            fileDestination.append(f.key());
+            std::ofstream file(fileDestination);
+            std::string contents = f.value();
+            file << contents;
+        }
+    }
+}
+
 int main(int argc, char** argv) {
 
     argparse::ArgumentParser program("buildtool");
 
+    // Lock Mode
     argparse::ArgumentParser lockCommand("lock");
-    argparse::ArgumentParser generateCommand("generate");
-
     program.add_subparser(lockCommand);
-    program.add_subparser(generateCommand);
 
     std::string cmake_build_directory_path_string;
     lockCommand.add_argument("path")
@@ -80,6 +96,11 @@ int main(int argc, char** argv) {
         .append()
         .store_into(copy_directories)
         .help("Specify extra directories to recursively encoded (any overlay triplet directories will be automatically recursively encoded)");
+
+
+    // Generate Mode
+    argparse::ArgumentParser generateCommand("generate");
+    program.add_subparser(generateCommand);
 
     std::string lockfile_path;
     generateCommand.add_argument("path")
@@ -315,7 +336,16 @@ int main(int argc, char** argv) {
 
     if (!lockfile_path.empty()) {
         std::ifstream lockfile(lockfile_path);
-        json manifestData = json::parse(lockfile);
+        json lockfileData = json::parse(lockfile);
+
+        json extra_directories = lockfileData["extra_directories"];
+        json configuration =  lockfileData["configuration"];
+        json manifest =  lockfileData["manifest"];
+
+        user_project_root.append(".generated_configuration");
+        std::filesystem::create_directory(user_project_root);
+        std::cout << "somethig";
+        generate_directory_structure_from_json_blob(extra_directories, user_project_root);
     }
 
     return 0;
