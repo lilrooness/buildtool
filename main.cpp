@@ -342,10 +342,21 @@ int main(int argc, char** argv) {
         json configuration =  lockfileData["configuration"];
         json manifest =  lockfileData["manifest"];
 
-        user_project_root.append(".generated_configuration");
-        std::filesystem::create_directory(user_project_root);
-        std::cout << "somethig";
-        generate_directory_structure_from_json_blob(extra_directories, user_project_root);
+        std::filesystem::path generated_configuration_dest(user_project_root);
+        generated_configuration_dest.append(".generated_configuration");
+        std::filesystem::create_directory(generated_configuration_dest);
+        generate_directory_structure_from_json_blob(extra_directories, generated_configuration_dest);
+
+        // TODO: read in the user's project vcpkg.json file to populate the dependencies array in the new manifest file
+        std::filesystem::path vcpkg_manifest_file_path(generated_configuration_dest);
+        vcpkg_manifest_file_path.append("vcpkg.json");
+        std::ofstream vcpkg_manifest_file(vcpkg_manifest_file_path);
+        vcpkg_manifest_file << manifest.dump(2);
+
+        std::filesystem::path vcpkg_configuration_file_path(generated_configuration_dest);
+        vcpkg_configuration_file_path.append("vcpkg-configuration.json");
+        std::ofstream vcpkg_configuration_file(vcpkg_configuration_file_path);
+        vcpkg_configuration_file << configuration.dump(2);
     }
 
     return 0;
