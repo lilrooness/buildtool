@@ -1,0 +1,12 @@
+{
+  "dependencies": [
+    {
+      "name": "argparse",
+      "version>=": "3.2"
+    },
+    {
+      "name": "nlohmann-json",
+      "version>=": "3.12.0#2"
+    }
+  ]
+}
