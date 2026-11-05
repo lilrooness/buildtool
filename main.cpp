@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 #include <sstream>
+#include <set>
 
 #include "CMakeCacheParser.h"
 
@@ -22,6 +23,28 @@ struct Dependency {
     std::string version;
     std::string registry;
 };
+
+std::string normalize_git_repository_url(std::string url) {
+    std::string url_without_protocol;
+    if (url.starts_with("git@")) {
+        auto ampersand_pos = url.find('@');
+        url_without_protocol = url.substr(ampersand_pos+1);
+        auto colon_pos = url_without_protocol.find(':');
+        url_without_protocol[colon_pos] = '/';
+    }
+    else if (url.starts_with("https://")) {
+        auto doubleSlashPos = url.find("//");
+        url_without_protocol = url.substr(doubleSlashPos+2);
+    }
+    else {
+        return url;
+    }
+
+    if (!url_without_protocol.ends_with(".git")) {
+        url_without_protocol += ".git";
+    }
+    return url_without_protocol;
+}
 
 json get_directory_as_json_blob(std::filesystem::path& path) {
     if (!std::filesystem::is_directory(path)) {
@@ -338,25 +361,99 @@ int main(int argc, char** argv) {
         std::ifstream lockfile(lockfile_path);
         json lockfileData = json::parse(lockfile);
 
-        json extra_directories = lockfileData["extra_directories"];
-        json configuration =  lockfileData["configuration"];
-        json manifest =  lockfileData["manifest"];
+        json extra_directories_blob = lockfileData["extra_directories"];
+        json configuration_blob =  lockfileData["configuration"];
+        json manifest_blob =  lockfileData["manifest"];
 
+        // generate directory structure from any directories & files encoded in lockfile
+        // (this includes overlay triplet dirs)
         std::filesystem::path generated_configuration_dest(user_project_root);
         generated_configuration_dest.append(".generated_configuration");
         std::filesystem::create_directory(generated_configuration_dest);
-        generate_directory_structure_from_json_blob(extra_directories, generated_configuration_dest);
+        generate_directory_structure_from_json_blob(extra_directories_blob, generated_configuration_dest);
 
-        // TODO: read in the user's project vcpkg.json file to populate the dependencies array in the new manifest file
+        // read user's vcpkg.json file
+        std::filesystem::path user_project_vcpkg_manifest_path(user_project_root);
+        user_project_vcpkg_manifest_path.append("vcpkg.json");
+        std::ifstream user_project_vcpkg_manifest_file(user_project_vcpkg_manifest_path);
+        json user_vcpkg_manifest_blob = json::parse(user_project_vcpkg_manifest_file);
+
+        // read user's vcpkg-configuration.json file
+        std::filesystem::path user_project_vcpkg_configuration_path(user_project_root);
+        user_project_vcpkg_configuration_path.append("vcpkg-configuration.json");
+        std::ifstream user_project_vcpkg_configuration_file(user_project_vcpkg_configuration_path);
+        json user_vcpkg_configuration_blob = json::parse(user_project_vcpkg_configuration_file);
+
+        // populate manifest with the user's vcpkg dependencies
+        json user_dependencies_list = user_vcpkg_manifest_blob["dependencies"];
+        manifest_blob["dependencies"] = user_dependencies_list;
+
+        // merge the configured registries lists between the locked project and the user's project
+        json user_configuration_registries_list = user_vcpkg_configuration_blob["registries"];
+        std::map<std::string, std::string> normalized_url_to_registry_url;
+        std::map<std::string, std::set<std::string> > normalized_registry_url_to_packages_set;
+        std::map<std::string, std::string> normalized_registry_url_to_baseline;
+
+        for (json registry : configuration_blob["registries"]) {
+            std::string repository_url = registry["repository"];
+            auto normalized_url = normalize_git_repository_url(repository_url);
+            normalized_url_to_registry_url[normalized_url] = repository_url;
+            normalized_registry_url_to_baseline[normalized_url] = registry["baseline"];
+            json packages = registry["packages"];
+            std::copy(
+                packages.begin(), packages.end(),
+                std::inserter(
+                    normalized_registry_url_to_packages_set[normalized_url],
+                    normalized_registry_url_to_packages_set[normalized_url].end()
+                )
+            );
+        }
+
+        for (json registry : user_vcpkg_configuration_blob["registries"]) {
+            std::string repository_url = registry["repository"];
+            auto normalized_url = normalize_git_repository_url(repository_url);
+            if (!normalized_url_to_registry_url.contains(normalized_url)) {
+                normalized_url_to_registry_url[normalized_url] = repository_url;
+                normalized_registry_url_to_baseline[normalized_url] = registry["baseline"];
+            }
+            json packages = registry["packages"];
+            std::copy(
+                packages.begin(), packages.end(),
+                std::inserter(
+                    normalized_registry_url_to_packages_set[normalized_url],
+                    normalized_registry_url_to_packages_set[normalized_url].end()
+                )
+            );
+        }
+
+        json new_registries_list = json::array();
+        for (auto pair : normalized_registry_url_to_packages_set) {
+            json thisRegitry = json::object();
+            thisRegitry["kind"] = "git";
+            thisRegitry["baseline"] = normalized_registry_url_to_baseline[pair.first];
+            thisRegitry["repository"] = normalized_url_to_registry_url[pair.first];
+
+            json packages = json::array();
+            for (auto package : pair.second) {
+                packages.push_back(package);
+            }
+            thisRegitry["packages"] = packages;
+            new_registries_list.push_back(thisRegitry);
+        }
+
+        configuration_blob["registries"] = new_registries_list;
+
+        // write generated vcpkg.json file
         std::filesystem::path vcpkg_manifest_file_path(generated_configuration_dest);
         vcpkg_manifest_file_path.append("vcpkg.json");
         std::ofstream vcpkg_manifest_file(vcpkg_manifest_file_path);
-        vcpkg_manifest_file << manifest.dump(2);
+        vcpkg_manifest_file << manifest_blob.dump(2);
 
+        // write generated vcpkg-configuration.json file
         std::filesystem::path vcpkg_configuration_file_path(generated_configuration_dest);
         vcpkg_configuration_file_path.append("vcpkg-configuration.json");
         std::ofstream vcpkg_configuration_file(vcpkg_configuration_file_path);
-        vcpkg_configuration_file << configuration.dump(2);
+        vcpkg_configuration_file << configuration_blob.dump(2);
     }
 
     return 0;
