@@ -39,8 +39,15 @@ int Locker::Lock(const std::string &lockfile_out_path) {
             return 1;
         }
 
+        bool usingOverlayTriplets {false};
+        std::filesystem::path generatedOverlayTripetsPath;
         if (cmakeCacheObj.variables.contains("VCPKG_OVERLAY_TRIPLETS")) {
             copy_directories.push_back(cmakeCacheObj.variables["VCPKG_OVERLAY_TRIPLETS"]);
+            // make sure the overlay triplets DIR is always first
+            std::string first = copy_directories.front();
+            copy_directories[0] = copy_directories.back();
+            copy_directories[copy_directories.size()-1] = first;
+            usingOverlayTriplets = true;
         }
 
         // recursively encode the directory structure & all the contained files into a json object
@@ -72,6 +79,7 @@ int Locker::Lock(const std::string &lockfile_out_path) {
                 current++;
             }
 
+            bool firstAround {true};
             for (std::filesystem::path copyPath : copy_directories) {
                 if (std::filesystem::is_directory(copyPath)) {
                     auto proximalPath  = std::filesystem::proximate(copyPath, closestCommonRoot);
@@ -87,8 +95,16 @@ int Locker::Lock(const std::string &lockfile_out_path) {
                         else {
                             node = &node->at(el.string());
                         }
+
+                        // build the path to the overlay triplets directory
+                        // the overlay triplet directory path is always first one in copy_directories if it exists
+                        if (usingOverlayTriplets && firstAround) {
+                            generatedOverlayTripetsPath.append(el.string());
+                        }
                     }
                 }
+
+                firstAround = false;
             }
         }
         else {
@@ -180,8 +196,13 @@ int Locker::Lock(const std::string &lockfile_out_path) {
             }},
             {"registries", json::array()}
             }},
-            {"extra_directories", encoded_directories_blob}
+            {"extra_directories", encoded_directories_blob},
+            {"target_triplet", triplet_name}
         };
+
+        if (usingOverlayTriplets) {
+            lockObject["overlay_triplets_path"] = generatedOverlayTripetsPath.string();
+        }
 
         for (auto entry : registry_to_packages) {
             auto registry = entry.first;

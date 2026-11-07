@@ -67,6 +67,12 @@ int main(int argc, char** argv) {
         .store_into(git_dependencies)
         .help("Specify a dependency on github '<DEPENDENCY NAME> <GIT URL>'");
 
+    std::string generatedPresetParentName;
+    generateCommand.add_argument("-i")
+        .default_value("")
+        .store_into(generatedPresetParentName)
+        .help("If set, the generated preset 'inherits' field will be set to this");
+
     try {
         program.parse_args(argc, argv);
     }
@@ -83,6 +89,9 @@ int main(int argc, char** argv) {
 
     if (!lockfile_path.empty()) {
         ConfigurationGenerator generator(lockfile_path);
+        if (!generatedPresetParentName.empty()) {
+            generator.SetParentPresetName(generatedPresetParentName);
+        }
         generator.Generate(user_project_root);
     }
 

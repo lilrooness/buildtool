@@ -7,6 +7,8 @@
 #include <fstream>
 #include <set>
 
+#include "CMakePresetsWriter.h"
+
 ConfigurationGenerator::ConfigurationGenerator(const std::string& lockfile_path) {
     std::ifstream lockfile(lockfile_path);
     json lockfileData = json::parse(lockfile);
@@ -14,6 +16,13 @@ ConfigurationGenerator::ConfigurationGenerator(const std::string& lockfile_path)
     extra_directories_blob = lockfileData["extra_directories"];
     configuration_blob =  lockfileData["configuration"];
     manifest_blob =  lockfileData["manifest"];
+    env_vars_blob = lockfileData["environment"];
+    if (lockfileData.contains("overlay_triplets_path")) {
+        overlayTripletsPath = lockfileData["overlay_triplets_path"];
+    }
+    if (lockfileData.contains("target_triplet")) {
+        targetTripletName = lockfileData["target_triplet"];
+    }
 }
 
 void ConfigurationGenerator::Generate(const std::string& user_project_root) {
@@ -106,6 +115,33 @@ void ConfigurationGenerator::Generate(const std::string& user_project_root) {
     vcpkg_configuration_file_path.append("vcpkg-configuration.json");
     std::ofstream vcpkg_configuration_file(vcpkg_configuration_file_path);
     vcpkg_configuration_file << configuration_blob.dump(2);
+
+    CMakePreset preset("generated-preset");
+    preset.data["environment"] = env_vars_blob;
+    preset.AddCacheVariable("VCPKG_MANIFEST_DIR", "${sourceDir}/" + generated_configuration_dest.filename().string());
+    if (!overlayTripletsPath.empty()) {
+        std::filesystem::path overylayTripletsStdFSPath = overlayTripletsPath;
+        std::filesystem::path overlayTripletsFullPath = generated_configuration_dest / overylayTripletsStdFSPath;
+        preset.AddCacheVariable("VCPKG_OVERLAY_TRIPLETS", "${sourceDir}/" + overlayTripletsFullPath.string());
+    }
+
+    if (!targetTripletName.empty()) {
+        preset.AddCacheVariable("VCPKG_TARGET_TRIPLET", targetTripletName);
+    }
+
+    if (!inheritsPreset.empty()) {
+        preset.SetInherits(inheritsPreset);
+    }
+
+    CMakePresetsWriter writer(3, 3, 31, 0);
+    writer.AddPreset(preset);
+    std::filesystem::path cmakeUserPresetsLocation(user_project_root);
+    cmakeUserPresetsLocation.append("CMakeUserPresets.json");
+    writer.Write(cmakeUserPresetsLocation.string());
+}
+
+void ConfigurationGenerator::SetParentPresetName(const std::string &name) {
+    inheritsPreset = name;
 }
 
 std::string ConfigurationGenerator::normalize_git_repository_url(const std::string& url) {

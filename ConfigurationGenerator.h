@@ -14,12 +14,17 @@ class ConfigurationGenerator {
 public:
     ConfigurationGenerator(const std::string& lockfile_path);
     void Generate(const std::string& user_project_root);
+    void SetParentPresetName(const std::string &);
 
 private:
     json lockfileData;
     json extra_directories_blob;
     json configuration_blob;
     json manifest_blob;
+    json env_vars_blob;
+    std::string overlayTripletsPath;
+    std::string targetTripletName;
+    std::string inheritsPreset;
 
     std::string normalize_git_repository_url(const std::string& url);
     void generate_directory_structure_from_json_blob(json blob, const std::filesystem::path& destination);
