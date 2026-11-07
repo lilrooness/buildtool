@@ -8,6 +8,11 @@ set(CMAKE_CXX_STANDARD 20)
 
 add_executable(buildtool main.cpp
         CMakeCacheParser.cpp
-        CMakeCacheParser.h)
+        CMakeCacheParser.h
+        ConfigurationGenerator.cpp
+        ConfigurationGenerator.h
+        Locker.cpp
+        Locker.h
+        Dependency.h)
 
 target_link_libraries(buildtool PRIVATE argparse::argparse nlohmann_json::nlohmann_json)
