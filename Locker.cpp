@@ -46,6 +46,9 @@ int Locker::Lock(const std::string &lockfile_out_path) {
         // recursively encode the directory structure & all the contained files into a json object
         json encoded_directories_blob = json::object();
         if (copy_directories.size() > 1) {
+            // calculate the closest common root directory for all directories we are copying
+            // (we need to assume that files in these directories depend on one-another using relative paths
+            // we can't account for bad decisions on behalf of the user though)
             auto firstCopyDir = std::filesystem::path(copy_directories[0]);
             auto sharedRoot = firstCopyDir.root_name();
             size_t shortestDistanceFromRoot {std::numeric_limits<size_t>::max()};
@@ -63,10 +66,12 @@ int Locker::Lock(const std::string &lockfile_out_path) {
             auto endItr = firstCopyDir.begin();
             std::advance(endItr, shortestDistanceFromRoot);
             std::filesystem::path closestCommonRoot;
+
             while (current != endItr) {
                 closestCommonRoot.append(current->string());
                 current++;
             }
+
             for (std::filesystem::path copyPath : copy_directories) {
                 if (std::filesystem::is_directory(copyPath)) {
                     auto proximalPath  = std::filesystem::proximate(copyPath, closestCommonRoot);
@@ -156,7 +161,13 @@ int Locker::Lock(const std::string &lockfile_out_path) {
         std::string default_registry_baseline = vcpkg_configuration_data["default-registry"]["baseline"];
         std::string default_registry_repository = vcpkg_configuration_data["default-registry"]["repository"];
 
+        std::map<std::string, std::string> env_vars_map;
+        for (int i=0; i<env_vars.size(); i+=2) {
+            env_vars_map[env_vars[i]] = env_vars[i+1];
+        }
+
         json lockObject = {
+            {"environment", env_vars_map},
             {"manifest", {
                         {"dependencies", json::array()},
                         {"overrides", json::array()}

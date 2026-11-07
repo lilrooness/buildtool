@@ -31,6 +31,12 @@ int main(int argc, char** argv) {
         .store_into(copy_directories)
         .help("Specify extra directories to recursively encoded (any overlay triplet directories will be automatically recursively encoded)");
 
+    std::vector<std::string> env_vars;
+    lockCommand.add_argument("--env", "-e")
+    .append()
+    .nargs(2)
+    .store_into(env_vars)
+    .help("name and value of an environment variable needed for the build <NAME> <VALUE>");
 
     // Generate Mode
     argparse::ArgumentParser generateCommand("generate");
@@ -71,7 +77,7 @@ int main(int argc, char** argv) {
     }
 
     if (!cmake_build_directory_path_string.empty()) {
-        Locker locker(cmake_build_directory_path_string, copy_directories);
+        Locker locker(cmake_build_directory_path_string, copy_directories, env_vars);
         return locker.Lock(lockfile_out_path);
     }
 
