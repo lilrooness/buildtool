@@ -8,6 +8,7 @@
 #include <fstream>
 #include <utility>
 #include <iostream>
+#include <sstream>
 
 #include "CMakeCacheParser.h"
 #include "Dependency.h"
@@ -84,7 +85,7 @@ int Locker::Lock(const std::string &lockfile_out_path) {
                 if (std::filesystem::is_directory(copyPath)) {
                     auto proximalPath  = std::filesystem::proximate(copyPath, closestCommonRoot);
                     json* node = &encoded_directories_blob;
-                    for (auto& el : proximalPath) {
+                    for (auto el : proximalPath) {
                         if (el == proximalPath.filename()) {
                             (*node)[el.string()] = get_directory_as_json_blob(copyPath);
                         }
@@ -107,7 +108,7 @@ int Locker::Lock(const std::string &lockfile_out_path) {
                 firstAround = false;
             }
         }
-        else {
+        else if (!copy_directories.empty()) {
             std::filesystem::path overlayTripletsPath = copy_directories[0];
             encoded_directories_blob[overlayTripletsPath.filename().string()] = get_directory_as_json_blob(overlayTripletsPath);
         }
