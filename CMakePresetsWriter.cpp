@@ -4,6 +4,7 @@
 
 #include "CMakePresetsWriter.h"
 #include <fstream>
+#include <set>
 
 CMakePresetsWriter::CMakePresetsWriter(int ver, int maj, int min, int pat) {
     cmakePresetFileObject["version"] = ver;
@@ -19,8 +20,53 @@ void CMakePresetsWriter::AddPreset(CMakePreset preset) {
 }
 
 void CMakePresetsWriter::Write(std::string output_path) {
+    std::filesystem::path output_std_filesystem_path(output_path);
+    if (output_std_filesystem_path.is_relative()) {
+        output_std_filesystem_path = std::filesystem::absolute(output_std_filesystem_path);
+    }
+    auto parentPath = output_std_filesystem_path.parent_path();
+
+    if (is_directory(parentPath)) {
+        for (auto child : std::filesystem::directory_iterator{parentPath}) {
+            if (child.path().filename() == "CMakeUserPresets.json") {
+                std::ifstream existingUserPresetsFile(child.path());
+
+                auto existingPresets = json::parse(existingUserPresetsFile);
+
+                if (existingPresets.contains("configurePresets")) {
+                    auto existingConfigurationPresets = existingPresets["configurePresets"];
+                    auto ourPresets = cmakePresetFileObject["configurePresets"];
+                    auto mergedPresets = MergePresetsLists(existingConfigurationPresets, ourPresets);
+                    cmakePresetFileObject["configurePresets"] = mergedPresets;
+                }
+            }
+        }
+    }
     std::ofstream ofile(output_path);
     ofile << cmakePresetFileObject.dump(2);
+}
+
+json::array_t CMakePresetsWriter::MergePresetsLists(json::array_t users, json::array_t ours) {
+    std::set<std::string> presetNames;
+    json::array_t presets;
+    for (auto preset : ours) {
+        std::string name = preset["name"];
+        presetNames.insert(name);
+        presets.push_back(preset);
+    }
+
+    for (auto preset : users) {
+        if (!preset.contains("name")) {
+            continue;
+        }
+        std::string name = preset["name"];
+        if (!presetNames.contains(name)) {
+            presetNames.insert(name);
+            presets.push_back(preset);
+        }
+    }
+
+    return presets;
 }
 
 CMakePreset::CMakePreset(const std::string& name) {

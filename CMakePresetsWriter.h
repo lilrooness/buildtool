@@ -37,6 +37,7 @@ public:
     CMakePresetsWriter(int ver=3, int maj=3, int min=31, int pat=0);
     void AddPreset(CMakePreset preset);
     void Write(std::string output_path);
+    json::array_t MergePresetsLists(json::array_t users, json::array_t ours);
 private:
     json cmakePresetFileObject = CMakePresetBase;
 };
