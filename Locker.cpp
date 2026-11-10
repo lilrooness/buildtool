@@ -269,6 +269,17 @@ json Locker::get_directory_as_json_blob(std::filesystem::path& path) {
                 first = false;
                 ss << line;
             }
+            file.close();
+
+            // check the last byte of the file for a newline char, so we don't miss it
+            file = std::ifstream(childPath, std::ios::binary);
+            file.seekg(-1, std::ios::end);
+            char lastChar;
+            file.get(lastChar);
+            if (lastChar == '\n') {
+                ss << lastChar;
+            }
+
             std::string entireFileString = ss.str();
             blob[childPath.filename().string()] = entireFileString;
         }
