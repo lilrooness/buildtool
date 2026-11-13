@@ -26,7 +26,6 @@ private:
     std::string targetTripletName;
     std::string inheritsPreset;
 
-    std::string normalize_git_repository_url(const std::string& url);
     void generate_directory_structure_from_json_blob(json blob, const std::filesystem::path& destination);
 };
 

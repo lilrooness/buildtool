@@ -89,28 +89,6 @@ void ConfigurationGenerator::SetParentPresetName(const std::string &name) {
     inheritsPreset = name;
 }
 
-std::string ConfigurationGenerator::normalize_git_repository_url(const std::string& url) {
-    std::string url_without_protocol;
-    if (url.starts_with("git@")) {
-        auto ampersand_pos = url.find('@');
-        url_without_protocol = url.substr(ampersand_pos+1);
-        auto colon_pos = url_without_protocol.find(':');
-        url_without_protocol[colon_pos] = '/';
-    }
-    else if (url.starts_with("https://")) {
-        auto doubleSlashPos = url.find("//");
-        url_without_protocol = url.substr(doubleSlashPos+2);
-    }
-    else {
-        return url;
-    }
-
-    if (!url_without_protocol.ends_with(".git")) {
-        url_without_protocol += ".git";
-    }
-    return url_without_protocol;
-}
-
 void ConfigurationGenerator::generate_directory_structure_from_json_blob(json blob, const std::filesystem::path& destination) {
     for (auto f : blob.items()) {
         if (f.value().is_object()) {
