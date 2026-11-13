@@ -13,6 +13,10 @@ struct Dependency {
         version(std::move(version)),
         registry(std::move(registry)) {};
 
+    Dependency(std::string name, std::string version) :
+        name(std::move(name)),
+        version(std::move(version)) {};
+
     std::string name;
     std::string version;
     std::string registry;

@@ -5,6 +5,8 @@
 
 #include "ConfigurationGenerator.h"
 #include "Locker.h"
+#include "MinimalConfigurationGenerator.h"
+#include "ProjectResolver.h"
 
 int main(int argc, char** argv) {
 
@@ -73,6 +75,34 @@ int main(int argc, char** argv) {
         .store_into(generatedPresetParentName)
         .help("If set, the generated preset 'inherits' field will be set to this");
 
+    // Target Mode
+    std::cout << "Constructing target command" << std::endl;
+    argparse::ArgumentParser targetCommand("target");
+    program.add_subparser(targetCommand);
+
+    std::string user_project_path;
+    targetCommand.add_argument("path")
+        .store_into(user_project_path)
+        .default_value(".")
+        .help("Path to the root of the project you wish to configure to the target configuration");
+
+    std::string target_spdx_path;
+    targetCommand.add_argument("--spdx", "-x")
+        .store_into(target_spdx_path)
+        .help("Path to the root directory containing SPDX files to produce version pins. Optional");
+
+    auto& group = targetCommand.add_mutually_exclusive_group(true);
+    std::string local_target_path;
+    group.add_argument("--local_target", "-l")
+        .store_into(local_target_path)
+        .help("Path to a local project you would like to target your dependency tree to EG -l /path/to/target/project");
+
+    std::vector<std::string> git_target_url_and_ref;
+    group.add_argument("--git_target", "-g")
+        .nargs(2)
+        .store_into(git_target_url_and_ref)
+        .help("Git URL and ref of project you would like to target your dependency tree to: EG -g https://github.com/carbonengine/scheduler.git refs/tags/v1.6.0");
+
     try {
         program.parse_args(argc, argv);
     }
@@ -93,6 +123,27 @@ int main(int argc, char** argv) {
             generator.SetParentPresetName(generatedPresetParentName);
         }
         generator.Generate(user_project_root);
+    }
+
+    if (program.is_subcommand_used("target")) {
+        ProjectLocator project_locator;
+        if (!git_target_url_and_ref.empty()) {
+            project_locator.type = ProjectLocatorType::GIT;
+            project_locator.git_url = git_target_url_and_ref[0];
+            project_locator.git_ref = git_target_url_and_ref[1];
+        }
+        else if (!local_target_path.empty()) {
+            project_locator.type = ProjectLocatorType::LOCAL;
+            project_locator.localPath = local_target_path;
+        }
+        MinimalConfigurationGenerator minimal_configuration_generator;
+        if (targetCommand.is_used("--spdx")) {
+        minimal_configuration_generator.AddSPDXRoot(target_spdx_path);
+        }
+
+
+        std::filesystem::path user_project_stdfs_path(user_project_path);
+        minimal_configuration_generator.GenerateConfigurationForLocalProject(user_project_stdfs_path, project_locator);
     }
 
     return 0;

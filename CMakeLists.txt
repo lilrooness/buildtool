@@ -15,6 +15,13 @@ add_executable(buildtool main.cpp
         Locker.h
         Dependency.h
         CMakePresetsWriter.cpp
-        CMakePresetsWriter.h)
+        CMakePresetsWriter.h
+        VcpkgConfigurationMerger.cpp
+        VcpkgConfigurationMerger.h
+        ProjectResolver.cpp
+        ProjectResolver.h
+        MinimalConfigurationGenerator.cpp
+        MinimalConfigurationGenerator.h
+        )
 
 target_link_libraries(buildtool PRIVATE argparse::argparse nlohmann_json::nlohmann_json)
