@@ -132,6 +132,9 @@ json MergeManifests(json user_manifest_blob, json target_manifest_blob, std::vec
 
     json output_manifest = user_manifest_blob;
     output_manifest["overrides"] = output_overrides_json_list;
+    if (user_manifest_blob.contains("features")) {
+        output_manifest["features"] = user_manifest_blob["features"];
+    }
 
     return output_manifest;
 }
