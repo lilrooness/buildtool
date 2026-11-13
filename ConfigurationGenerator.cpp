@@ -8,6 +8,7 @@
 #include <set>
 
 #include "CMakePresetsWriter.h"
+#include "VcpkgConfigurationMerger.h"
 
 ConfigurationGenerator::ConfigurationGenerator(const std::string& lockfile_path) {
     std::ifstream lockfile(lockfile_path);
@@ -45,64 +46,8 @@ void ConfigurationGenerator::Generate(const std::string& user_project_root) {
     std::ifstream user_project_vcpkg_configuration_file(user_project_vcpkg_configuration_path);
     json user_vcpkg_configuration_blob = json::parse(user_project_vcpkg_configuration_file);
 
-    // populate manifest with the user's vcpkg dependencies
-    json user_dependencies_list = user_vcpkg_manifest_blob["dependencies"];
-    manifest_blob["dependencies"] = user_dependencies_list;
-
-    // merge the configured registries lists between the locked project and the user's project
-    json user_configuration_registries_list = user_vcpkg_configuration_blob["registries"];
-    std::map<std::string, std::string> normalized_url_to_registry_url;
-    std::map<std::string, std::set<std::string> > normalized_registry_url_to_packages_set;
-    std::map<std::string, std::string> normalized_registry_url_to_baseline;
-
-    for (json registry : configuration_blob["registries"]) {
-        std::string repository_url = registry["repository"];
-        auto normalized_url = normalize_git_repository_url(repository_url);
-        normalized_url_to_registry_url[normalized_url] = repository_url;
-        normalized_registry_url_to_baseline[normalized_url] = registry["baseline"];
-        json packages = registry["packages"];
-        std::copy(
-            packages.begin(), packages.end(),
-            std::inserter(
-                normalized_registry_url_to_packages_set[normalized_url],
-                normalized_registry_url_to_packages_set[normalized_url].end()
-            )
-        );
-    }
-
-    for (json registry : user_vcpkg_configuration_blob["registries"]) {
-        std::string repository_url = registry["repository"];
-        auto normalized_url = normalize_git_repository_url(repository_url);
-        if (!normalized_url_to_registry_url.contains(normalized_url)) {
-            normalized_url_to_registry_url[normalized_url] = repository_url;
-            normalized_registry_url_to_baseline[normalized_url] = registry["baseline"];
-        }
-        json packages = registry["packages"];
-        std::copy(
-            packages.begin(), packages.end(),
-            std::inserter(
-                normalized_registry_url_to_packages_set[normalized_url],
-                normalized_registry_url_to_packages_set[normalized_url].end()
-            )
-        );
-    }
-
-    json new_registries_list = json::array();
-    for (auto pair : normalized_registry_url_to_packages_set) {
-        json thisRegitry = json::object();
-        thisRegitry["kind"] = "git";
-        thisRegitry["baseline"] = normalized_registry_url_to_baseline[pair.first];
-        thisRegitry["repository"] = normalized_url_to_registry_url[pair.first];
-
-        json packages = json::array();
-        for (auto package : pair.second) {
-            packages.push_back(package);
-        }
-        thisRegitry["packages"] = packages;
-        new_registries_list.push_back(thisRegitry);
-    }
-
-    configuration_blob["registries"] = new_registries_list;
+    manifest_blob = MergeManifests(user_vcpkg_manifest_blob, manifest_blob);
+    configuration_blob = MergeConfigurations(user_vcpkg_configuration_blob, configuration_blob);
 
     // write generated vcpkg.json file
     std::filesystem::path vcpkg_manifest_file_path(generated_configuration_dest);
